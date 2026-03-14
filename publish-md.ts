@@ -4,7 +4,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "js-yaml";
 
-// ============ 读取配置文件 ============
 interface Config {
   wechat: {
     appId: string;
@@ -30,7 +29,6 @@ const WECHAT_APPSECRET =
   CONFIG.wechat?.appSecret || process.env.WECHAT_APPSECRET;
 const DEFAULT_AUTHOR = CONFIG.author || "Anonymous";
 
-// ============ 内联样式映射 (mdnice 风格) ============
 const PRIMARY_COLOR = "rgb(248, 57, 41)";
 const FONT_FAMILY =
   "'Microsoft YaHei','PingFang SC','Helvetica Neue',Helvetica,Arial,sans-serif";
@@ -102,7 +100,6 @@ const STYLES: Record<string, string> = {
   section: `font-family:${FONT_FAMILY};font-size:16px;line-height:1.8em;text-align:left;color:rgb(53,53,53);`,
 };
 
-// ============ 微信 API 工具 ============
 
 async function getAccessToken(): Promise<string> {
   const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${WECHAT_APPID}&secret=${WECHAT_APPSECRET}`;
@@ -574,22 +571,23 @@ function convertToHTML(markdown: string): string {
 </html>`;
 }
 
-// ============ 主程序 ============
 
 async function main() {
-  const args = process.argv.slice(2);
-  if (args.length < 1 || args.includes("--help") || args.includes("-h")) {
-    console.log("\n📝 Markdown → 微信公众号草稿（完整内联样式版）\n");
-    console.log("用法: vite-node publish-md.ts <article.md> [选项]\n");
-    console.log("选项:");
-    console.log("  -t, --title <标题>     指定文章标题");
-    console.log("  -a, --author <作者>    指定作者");
-    console.log("  -d, --digest <摘要>    指定摘要");
-    console.log("  -h, --help             显示帮助\n");
-    console.log("示例:");
-    console.log("  vite-node publish-md.ts article.md");
-    console.log('  vite-node publish-md.ts article.md -t "标题" -a "作者"\n');
-    process.exit(0);
+  const args = process.argv.slice(2)
+  if (args.length < 1 || args.includes('--help') || args.includes('-h')) {
+    console.log('\n📝 Markdown → 微信公众号草稿（完整内联样式版）\n')
+    console.log('用法: vite-node publish-md.ts <article.md> [选项]\n')
+    console.log('选项:')
+    console.log('  -t, --title <标题>     指定文章标题')
+    console.log('  -a, --author <作者>    指定作者')
+    console.log('  -d, --digest <摘要>    指定摘要')
+    console.log('  -c, --cover <封面图>   指定封面图片路径')
+    console.log('  -h, --help             显示帮助\n')
+    console.log('示例:')
+    console.log('  vite-node publish-md.ts article.md')
+    console.log('  vite-node publish-md.ts article.md -t "标题" -a "作者"')
+    console.log('  vite-node publish-md.ts article.md -t "标题" -c /path/to/cover.png\n')
+    process.exit(0)
   }
 
   if (!WECHAT_APPID || !WECHAT_APPSECRET) {
@@ -607,11 +605,13 @@ async function main() {
     process.exit(1);
   }
 
-  const titleIndex = args.findIndex((a) => a === "-t" || a === "--title");
-  const authorIndex = args.findIndex((a) => a === "-a" || a === "--author");
-  const digestIndex = args.findIndex((a) => a === "-d" || a === "--digest");
-  const author = authorIndex !== -1 ? args[authorIndex + 1] : DEFAULT_AUTHOR;
-  const digest = digestIndex !== -1 ? args[digestIndex + 1] : undefined;
+  const titleIndex = args.findIndex(a => a === '-t' || a === '--title')
+  const authorIndex = args.findIndex(a => a === '-a' || a === '--author')
+  const digestIndex = args.findIndex(a => a === '-d' || a === '--digest')
+  const coverIndex = args.findIndex(a => a === '-c' || a === '--cover')
+  const author = authorIndex !== -1 ? args[authorIndex + 1] : DEFAULT_AUTHOR
+  const digest = digestIndex !== -1 ? args[digestIndex + 1] : undefined
+  const coverImagePath = coverIndex !== -1 ? args[coverIndex + 1] : undefined
 
   console.log("\n🚀 开始处理...\n");
   const markdown = fs.readFileSync(mdFile, "utf-8");
@@ -646,14 +646,29 @@ async function main() {
   console.log(`   ✅ 转换完成 (${html.length} 字符)`);
   console.log("");
 
-  // 使用文章中的第一张图作为封面，如果没有则去素材库获取
-  let thumbMediaId = firstMediaId;
-  if (thumbMediaId) {
-    console.log("📷 使用文章第一张图作为封面");
-    console.log("   ✅ 已设置");
-  } else {
-    console.log("📷 从素材库获取封面图...");
-    thumbMediaId = (await getCoverImage(accessToken)) || "";
+  // 使用指定的封面图，或文章中的第一张图，或从素材库获取
+  let thumbMediaId: string | undefined
+  
+  if (coverImagePath && fs.existsSync(coverImagePath)) {
+    console.log('📷 上传指定封面图...')
+    try {
+      const { mediaId } = await uploadImage(accessToken, coverImagePath)
+      thumbMediaId = mediaId
+      console.log('   ✅ 封面图上传成功')
+    } catch (error: any) {
+      console.log(`   ❌ 封面上传失败: ${error.message}`)
+    }
+  }
+  
+  if (!thumbMediaId && firstMediaId) {
+    thumbMediaId = firstMediaId
+    console.log('📷 使用文章第一张图作为封面')
+    console.log('   ✅ 已设置')
+  }
+  
+  if (!thumbMediaId) {
+    console.log('📷 从素材库获取封面图...')
+    thumbMediaId = await getCoverImage(accessToken) || ''
     if (thumbMediaId) {
       console.log("   ✅ 已获取");
     } else {

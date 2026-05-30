@@ -484,6 +484,28 @@ function normalizeLeadingCover(html: string): string {
 }
 
 function convertToHTML(markdown: string): string {
+  // Polyfill window object for server-side rendering (marked extensions may access it)
+  if (typeof globalThis.window === 'undefined') {
+    (globalThis as any).window = globalThis;
+  }
+  // Mock MathJax for katex extension
+  if (!(globalThis as any).window.MathJax) {
+    (globalThis as any).window.MathJax = {
+      texReset: () => {},
+      tex2svg: () => ({ 
+        firstChild: { 
+          style: { 
+            setProperty: () => {},
+            display: '' 
+          }, 
+          getAttribute: () => null, 
+          removeAttribute: () => {}, 
+          outerHTML: '<svg></svg>' 
+        } 
+      })
+    };
+  }
+  
   const renderer = initRenderer({
     legend: "alt",
     citeStatus: true,
@@ -566,7 +588,7 @@ function convertToHTML(markdown: string): string {
   return `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;">
-  <section data-tool="mdnice编辑器" style="${STYLES.section};padding:0 10px;">${styledHTML}</section>
+  <section data-tool="mdnice编辑器" style="${STYLES.section};padding:0;">${styledHTML}</section>
 </body>
 </html>`;
 }

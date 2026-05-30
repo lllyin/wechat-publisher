@@ -585,10 +585,22 @@ function convertToHTML(markdown: string): string {
 
   const styledHTML = addInlineStyles(bodyHTML);
 
+  // 去掉第一个元素的上方间距（微信阅读器自身已有外边距，叠加导致顶部空行）
+  const trimmedHTML = styledHTML.replace(
+    /(<section[^>]*>)(\s*<(?:p|h[1-4]|blockquote)[^>]*)(style="[^"]*)/,
+    (_m, sectionOpen, firstElOpen, styleAttr) => {
+      // 去掉 margin-top 和 padding-top
+      const cleaned = styleAttr
+        .replace(/margin-top:[^;]+;?/g, '')
+        .replace(/padding-top:[^;]+;?/g, '');
+      return `${sectionOpen}${firstElOpen}${cleaned};margin-top:0;padding-top:0;`;
+    },
+  );
+
   return `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;">
-  <section data-tool="mdnice编辑器" style="${STYLES.section};padding:0;">${styledHTML}</section>
+  <section data-tool="mdnice编辑器" style="${STYLES.section};padding:0;">${trimmedHTML}</section>
 </body>
 </html>`;
 }
